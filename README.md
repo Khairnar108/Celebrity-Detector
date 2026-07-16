@@ -1,3 +1,4 @@
+<img width="1361" height="262" alt="Screenshot 2026-07-16 204423" src="https://github.com/user-attachments/assets/8877c7b3-6b99-46c5-af2c-08b81daa3828" />
 # Celebrity-Detector
 
 Celebrity Recognition System using AWS
