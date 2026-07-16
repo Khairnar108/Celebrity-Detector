@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Who's That? — Celebrity Recognition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;0,900;1,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --stage: #0c0d13;
+    --stage-2: #14161f;
+    --card: #191c28;
+    --card-line: rgba(212,175,55,0.14);
+    --gold: #d4af37;
+    --gold-bright: #f2c14e;
+    --ink: #f4f2ea;
+    --muted: #8991a8;
+    --muted-2: #5c6480;
+    --error: #e2545a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--stage);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+
+  .stage-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+  .beam {
+    position: absolute; top: -20%; width: 60vw; height: 140vh;
+    background: conic-gradient(from 180deg at 50% 0%, transparent 40%, rgba(212,175,55,0.05) 48%, rgba(212,175,55,0.09) 50%, rgba(212,175,55,0.05) 52%, transparent 60%);
+    transform-origin: top center;
+  }
+  .beam.b1 { left: -15%; transform: rotate(8deg); }
+  .beam.b2 { right: -15%; transform: rotate(-8deg); }
+
+  .wrap {
+    position: relative; z-index: 1; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 56px 20px 80px;
+  }
+
+  header { text-align: center; margin-bottom: 8px; }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.28em;
+    text-transform: uppercase; color: var(--gold); margin-bottom: 14px;
+  }
+  .eyebrow::before, .eyebrow::after { content: '✦'; margin: 0 10px; opacity: 0.6; }
+  h1 {
+    font-family: 'Playfair Display', serif; font-weight: 900; font-style: italic;
+    font-size: clamp(38px, 6vw, 64px); margin: 0; line-height: 1;
+    background: linear-gradient(180deg, var(--gold-bright) 0%, var(--gold) 60%, #a9822a 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: -0.01em;
+  }
+  .tagline { color: var(--muted); font-size: 15px; margin-top: 14px; max-width: 420px; }
+
+  .rail {
+    display: flex; align-items: center; gap: 10px; margin: 36px 0 40px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.05em;
+  }
+  .rail .step { display: flex; align-items: center; gap: 8px; color: var(--muted-2); transition: color 0.3s; }
+  .rail .step.active { color: var(--gold-bright); }
+  .rail .step .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted-2); transition: background 0.3s, box-shadow 0.3s; }
+  .rail .step.active .dot { background: var(--gold-bright); box-shadow: 0 0 10px var(--gold-bright); }
+  .rail .line { width: 30px; height: 1px; background: rgba(255,255,255,0.12); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--card-line); border-radius: 18px;
+    padding: 36px; width: 100%; max-width: 460px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+
+  .dropzone {
+    position: relative; border: 1.5px dashed rgba(212,175,55,0.28); border-radius: 14px;
+    padding: 30px 20px; text-align: center; cursor: pointer;
+    transition: border-color 0.25s, background 0.25s; overflow: hidden;
+  }
+  .dropzone:hover, .dropzone.drag { border-color: var(--gold); background: rgba(212,175,55,0.05); }
+  .dropzone input { display: none; }
+  .dropzone .lens {
+    width: 46px; height: 46px; margin: 0 auto 14px; border-radius: 50%;
+    border: 2px solid var(--gold); display: flex; align-items: center; justify-content: center; font-size: 18px;
+  }
+  .dropzone .instruct { font-size: 14px; color: var(--ink); }
+  .dropzone .hint { color: var(--muted-2); font-size: 12px; margin-top: 4px; }
+
+  .preview-wrap { display: none; position: relative; }
+  .preview-wrap img { width: 100%; max-height: 260px; object-fit: cover; border-radius: 12px; display: block; }
+  .preview-wrap .swap {
+    position: absolute; bottom: 10px; right: 10px; background: rgba(12,13,19,0.85); color: var(--gold-bright);
+    border: 1px solid var(--card-line); border-radius: 8px; font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.05em; padding: 6px 10px; cursor: pointer;
+  }
+  .scan-line {
+    position: absolute; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold-bright), transparent);
+    box-shadow: 0 0 12px var(--gold-bright); top: 0; opacity: 0; pointer-events: none;
+  }
+  .scan-line.active { animation: scan 1.4s ease-in-out infinite; opacity: 1; }
+  @keyframes scan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
+
+  button.detect {
+    width: 100%; margin-top: 20px; padding: 15px; border: none; border-radius: 10px;
+    background: linear-gradient(90deg, var(--gold) 0%, var(--gold-bright) 100%);
+    color: #17130a; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 14px;
+    letter-spacing: 0.02em; cursor: pointer; transition: transform 0.12s, opacity 0.2s, box-shadow 0.2s;
+    box-shadow: 0 8px 24px rgba(212,175,55,0.25);
+  }
+  button.detect:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+  button.detect:not(:disabled):hover { box-shadow: 0 10px 30px rgba(212,175,55,0.4); }
+  button.detect:not(:disabled):active { transform: scale(0.98); }
+
+  .status {
+    margin-top: 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--gold-bright); text-align: center; min-height: 16px; letter-spacing: 0.04em;
+  }
+
+  .result {
+    display: none; margin-top: 22px; border: 1px solid var(--card-line); border-radius: 14px;
+    padding: 22px; position: relative; overflow: hidden;
+    background: linear-gradient(160deg, rgba(212,175,55,0.09), transparent 60%);
+  }
+  .result .kicker {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.2em;
+    color: var(--gold); text-transform: uppercase; margin-bottom: 8px;
+  }
+  .result .name {
+    font-family: 'Playfair Display', serif; font-weight: 700; font-style: italic;
+    font-size: 26px; color: var(--ink); line-height: 1.15;
+  }
+  .result .meter-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .result .meter { flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; }
+  .result .meter-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-bright)); border-radius: 3px; width: 0%; transition: width 1s cubic-bezier(.2,.9,.3,1); }
+  .result .pct { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); min-width: 42px; text-align: right; }
+  .result .more { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-line); }
+  .result .more .row { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); padding: 4px 0; }
+  .result .more .row b { color: var(--ink); font-weight: 600; }
+
+  .error {
+    display: none; margin-top: 18px; padding: 14px 16px; border-radius: 10px;
+    background: rgba(226,84,90,0.08); border: 1px solid rgba(226,84,90,0.3);
+    color: #ff9da2; font-size: 13px; line-height: 1.5;
+  }
+
+  .config { margin-top: 26px; padding-top: 20px; border-top: 1px dashed rgba(255,255,255,0.08); }
+  .config summary {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.05em;
+    color: var(--muted-2); cursor: pointer; list-style: none; user-select: none;
+  }
+  .config summary::-webkit-details-marker { display: none; }
+  .config summary::before { content: '⚙ '; }
+  .config .inner { margin-top: 12px; }
+  .config label { font-size: 11px; color: var(--muted-2); display: block; margin-bottom: 6px; font-family: 'JetBrains Mono', monospace; }
+  .config input {
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
+    background: #0f111a; color: var(--ink); font-size: 12px; font-family: 'JetBrains Mono', monospace;
+  }
+  .config input:focus { outline: none; border-color: var(--gold); }
+
+  footer { margin-top: 34px; color: var(--muted-2); font-size: 12px; text-align: center; }
+
+  @media (prefers-reduced-motion: reduce) { .scan-line.active { animation: none; opacity: 1; } }
+</style>
+</head>
+<body>
+
+<div class="stage-bg"><div class="beam b1"></div><div class="beam b2"></div></div>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">AI Recognition</div>
+    <h1>Who's That?</h1>
+    <p class="tagline">Drop in a photo and let computer vision put a name to the face on the red carpet.</p>
+  </header>
+
+  <div class="rail">
+    <div class="step active" id="step1"><span class="dot"></span>Upload</div>
+    <div class="line"></div>
+    <div class="step" id="step2"><span class="dot"></span>Scan</div>
+    <div class="line"></div>
+    <div class="step" id="step3"><span class="dot"></span>Reveal</div>
+  </div>
+
+  <div class="card">
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept="image/*">
+      <div id="dzDefault">
+        <div class="lens">◎</div>
+        <div class="instruct">Click to choose a photo, or drag it here</div>
+        <div class="hint">JPG or PNG · one face or a whole cast</div>
+      </div>
+      <div class="preview-wrap" id="previewWrap">
+        <img id="preview">
+        <div class="scan-line" id="scanLine"></div>
+        <div class="swap">CHANGE PHOTO</div>
+      </div>
+    </div>
+
+    <button class="detect" id="detectBtn" disabled>Reveal Identity</button>
+    <div class="status" id="status"></div>
+
+    <div class="result" id="result">
+      <div class="kicker" id="resultKicker">Identified</div>
+      <div class="name" id="resultName">—</div>
+      <div class="meter-row">
+        <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
+        <div class="pct" id="pctText">0%</div>
+      </div>
+      <div class="more" id="moreWrap" style="display:none;"></div>
+    </div>
+
+    <div class="error" id="errorBox"></div>
+
+    <details class="config">
+      <summary>API connection</summary>
+      <div class="inner">
+        <label>API Base URL</label>
+        <input type="text" id="apiUrl" placeholder="https://abc123xyz.execute-api.us-east-1.amazonaws.com">
+      </div>
+    </details>
+  </div>
+
+  <footer>Built on AWS Lambda · Rekognition · S3 · DynamoDB</footer>
+</div>
+
+<script>
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const dzDefault = document.getElementById('dzDefault');
+  const previewWrap = document.getElementById('previewWrap');
+  const preview = document.getElementById('preview');
+  const scanLine = document.getElementById('scanLine');
+  const detectBtn = document.getElementById('detectBtn');
+  const statusEl = document.getElementById('status');
+  const resultBox = document.getElementById('result');
+  const resultKicker = document.getElementById('resultKicker');
+  const resultName = document.getElementById('resultName');
+  const meterFill = document.getElementById('meterFill');
+  const pctText = document.getElementById('pctText');
+  const moreWrap = document.getElementById('moreWrap');
+  const errorBox = document.getElementById('errorBox');
+  const apiUrlInput = document.getElementById('apiUrl');
+  const step1 = document.getElementById('step1');
+  const step2 = document.getElementById('step2');
+  const step3 = document.getElementById('step3');
+
+  let selectedFile = null;
+
+  function setStep(n) {
+    [step1, step2, step3].forEach((el, i) => el.classList.toggle('active', i < n));
+  }
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('drag');
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length) handleFile(e.target.files[0]);
+  });
+
+  function handleFile(file) {
+    selectedFile = file;
+    preview.src = URL.createObjectURL(file);
+    dzDefault.style.display = 'none';
+    previewWrap.style.display = 'block';
+    detectBtn.disabled = false;
+    resultBox.style.display = 'none';
+    errorBox.style.display = 'none';
+    setStep(1);
+  }
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.style.display = 'block';
+    resultBox.style.display = 'none';
+    statusEl.textContent = '';
+    setStep(1);
+  }
+
+  detectBtn.addEventListener('click', async () => {
+    const apiBase = apiUrlInput.value.trim().replace(/\/$/, '');
+    if (!apiBase) { showError('Add your API Base URL in "API connection" below first.'); return; }
+    if (!selectedFile) return;
+
+    detectBtn.disabled = true;
+    errorBox.style.display = 'none';
+    resultBox.style.display = 'none';
+    scanLine.classList.add('active');
+    setStep(2);
+
+    try {
+      statusEl.textContent = 'REQUESTING UPLOAD LINK…';
+      const ext = (selectedFile.name.split('.').pop() || 'jpg').toLowerCase();
+      const urlRes = await fetch(`${apiBase}/upload-url?ext=${ext}`);
+      if (!urlRes.ok) throw new Error('Could not get an upload link. Check the API URL and CORS settings.');
+      const { uploadUrl, imageKey } = await urlRes.json();
+
+      statusEl.textContent = 'UPLOADING PHOTO…';
+      const putRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': selectedFile.type || `image/${ext}` },
+        body: selectedFile
+      });
+      if (!putRes.ok) throw new Error('Upload to S3 failed.');
+
+      statusEl.textContent = 'SCANNING FOR FACES…';
+      const detectRes = await fetch(`${apiBase}/celebrity?imageKey=${encodeURIComponent(imageKey)}`);
+      const data = await detectRes.json();
+      if (!detectRes.ok) throw new Error(data.error || 'Detection failed.');
+
+      scanLine.classList.remove('active');
+      statusEl.textContent = '';
+      setStep(3);
+
+      if (!data.celebrities || data.celebrities.length === 0) {
+        showError('No known celebrity was recognized in this photo. Try a clearer or more famous face.');
+        setStep(1);
+      } else if (data.celebrities.length === 1) {
+        const c = data.celebrities[0];
+        resultKicker.textContent = 'Identified';
+        resultName.textContent = c.celebrity;
+        pctText.textContent = c.confidence + '%';
+        moreWrap.style.display = 'none';
+        resultBox.style.display = 'block';
+        requestAnimationFrame(() => { meterFill.style.width = c.confidence + '%'; });
+      } else {
+        const top = data.celebrities[0];
+        resultKicker.textContent = `${data.celebrities.length} Faces Identified`;
+        resultName.textContent = top.celebrity;
+        pctText.textContent = top.confidence + '%';
+        moreWrap.innerHTML = data.celebrities.slice(1)
+          .map(c => `<div class="row"><span>${c.celebrity}</span><b>${c.confidence}%</b></div>`).join('');
+        moreWrap.style.display = 'block';
+        resultBox.style.display = 'block';
+        requestAnimationFrame(() => { meterFill.style.width = top.confidence + '%'; });
+      }
+    } catch (err) {
+      scanLine.classList.remove('active');
+      showError(err.message);
+    } finally {
+      detectBtn.disabled = false;
+    }
+  });
+</script>
+
+</body>
+</html>
